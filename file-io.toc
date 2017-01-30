@@ -1,19 +1,21 @@
 
-(inline-text "
+(inline-C "
 
 typedef struct {
+  int open;
   FILE *fd;} fileDescStruct;
 
 void close_file(void *ptr) {
   fileDescStruct *fileDesc = (fileDescStruct *)ptr;
-  fclose(fileDesc->fd);
+  if (fileDesc->open)
+    fclose(fileDesc->fd);
   free(fileDesc);
   atomic_fetch_add(&free_count, 1);
 }
 ")
 
 (defn fopen-read [file-path]
-  (inline-text Maybe "
+  (inline-C Maybe "
    String *arg0Str = malloc_string(((String *)arg0)->len + 5);
     if (arg0->type == StringType)
       snprintf(arg0Str->buffer, ((String *)arg0)->len + 1, \"%s\", ((String *)arg0)->buffer);
@@ -32,6 +34,7 @@ void close_file(void *ptr) {
       fseek(fd, 0, SEEK_SET);
       fileDescStruct *fdStruct = (fileDescStruct *)my_malloc(sizeof(fileDescStruct));
       fdStruct->fd = fd;
+      fdStruct->open = 1;
       Value *opaque = opaqueValue(fdStruct, close_file);
       Value *mo = maybe((List *)0, (Value *)0, opaque);
       dec_and_free(opaque);
@@ -41,7 +44,7 @@ void close_file(void *ptr) {
 
 (defn read* [fileDesc]
   ;; private function. Use 'blocking-read' instead
-  (inline-text String "
+  (inline-C String "
   fileDescStruct *fileDesc = (fileDescStruct *)((Opaque *)arg0)->ptr;
   if (feof(fileDesc->fd))
     return((Value *)malloc_string(0));
@@ -60,7 +63,7 @@ void close_file(void *ptr) {
 "))
 
 (defn eof? [fileDesc]
-  (inline-text Maybe "
+  (inline-C Maybe "
   fileDescStruct *fileDesc = (fileDescStruct *)((Opaque *)arg0)->ptr;
   if (!feof(fileDesc->fd)) {
     return(nothing);
@@ -71,7 +74,7 @@ void close_file(void *ptr) {
 "))
 
 (defn fopen-write [file-path]
-  (inline-text Maybe "
+  (inline-C Maybe "
     String *arg0Str = malloc_string(((String *)arg0)->len + 5);
     if (arg0->type == StringType)
       snprintf(arg0Str->buffer, ((String *)arg0)->len + 1, \"%s\", ((String *)arg0)->buffer);
@@ -88,6 +91,7 @@ void close_file(void *ptr) {
       return(nothing);
     } else {
       fileDescStruct *fdStruct = (fileDescStruct *)my_malloc(sizeof(fileDescStruct));
+      fdStruct->open = 1;
       fdStruct->fd = fd;
       Value *opaque = opaqueValue(fdStruct, close_file);
       Value *mo = maybe((List *)0, (Value *)0, opaque);
@@ -98,7 +102,7 @@ void close_file(void *ptr) {
 
 (defn write* [file-desc str-buffer]
   ;; private function. Use 'write' instead
-  (inline-text Number "
+  (inline-C Number "
   char *buffer;
   int64_t len;
 
@@ -116,10 +120,19 @@ void close_file(void *ptr) {
   return(numberValue(fwrite(buffer, 1, len, fileDesc->fd)));
 "))
 
+(defn close* [file-desc]
+  ;; private function. Use 'close' instead
+  (inline-C Number "
+  fileDescStruct *fileDesc = (fileDescStruct *)((Opaque *)arg0)->ptr;
+  fclose(fileDesc->fd);
+  return(numberValue(1));
+"))
+
 (defprotocol FileProto
   (write [_ str-buffer])
   (read [_])
-  (blocking-read [_]))
+  (blocking-read [_])
+  (close [_]))
 
 (deftype InputFile [file-desc path]
   Stringable
@@ -132,6 +145,9 @@ void close_file(void *ptr) {
   Container
   (extract [_]
     (read* file-desc))
+
+  FileProto
+  (close [_] (close* file-desc))
   )
 
 (deftype OutputFile [file-desc path]
@@ -140,6 +156,7 @@ void close_file(void *ptr) {
 
   FileProto
   (write [_ str-buffer] (write* file-desc str-buffer))
+  (close [_] (close* file-desc))
   )
 
 (defn file-out [path]
