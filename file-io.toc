@@ -10,7 +10,9 @@ void close_file(void *ptr) {
   if (fileDesc->open)
     fclose(fileDesc->fd);
   free(fileDesc);
+#ifdef CHECK_MEM_LEAK
   atomic_fetch_add(&free_count, 1);
+#endif
 }
 ")
 
