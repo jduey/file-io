@@ -29,7 +29,7 @@ void close_file(void *ptr) {
     }
 
     FILE* fd = fopen(arg0Str->buffer, \"r\");
-    dec_and_free((Value *)arg0Str);
+    dec_and_free((Value *)arg0Str, 1);
     if (fd == NULL) {
       return(nothing);
     } else {
@@ -39,7 +39,7 @@ void close_file(void *ptr) {
       fdStruct->open = 1;
       Value *opaque = opaqueValue(fdStruct, close_file);
       Value *mo = maybe((List *)0, (Value *)0, opaque);
-      dec_and_free(opaque);
+      dec_and_free(opaque, 1);
       return(mo);
     }
 "))
@@ -88,7 +88,7 @@ void close_file(void *ptr) {
     }
 
     FILE* fd = fopen(arg0Str->buffer, \"wb\");
-    dec_and_free((Value *)arg0Str);
+    dec_and_free((Value *)arg0Str, 1);
     if (fd == NULL) {
       return(nothing);
     } else {
@@ -97,7 +97,7 @@ void close_file(void *ptr) {
       fdStruct->fd = fd;
       Value *opaque = opaqueValue(fdStruct, close_file);
       Value *mo = maybe((List *)0, (Value *)0, opaque);
-      dec_and_free(opaque);
+      dec_and_free(opaque, 1);
       return(mo);
     }
 "))
