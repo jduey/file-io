@@ -171,5 +171,20 @@ void close_file(void *ptr) {
        (fn [file-desc]
          (InputFile file-desc path))))
 
+(defn slurp [fileName]
+  (inline-C String
+   "String *arg0Str = nullTerm(arg0);
+
+    FILE *file = fopen(arg0Str->buffer, \"r\");
+    fseek(file, 0, SEEK_END);
+    int64_t buffSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    String *strVal = malloc_string(buffSize);
+    fread(strVal->buffer, 1, buffSize, file);
+    fclose(file);
+    dec_and_free((Value *)arg0Str, 1);
+    return((Value *)strVal);\n"))
+
+
 ;; (defn file-stream [file]
 ;;   (st/cache (st/stream file blocking-read identity empty?)))
