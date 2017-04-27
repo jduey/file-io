@@ -18,6 +18,7 @@ void close_file(void *ptr) {
 
 (defn fopen-read [file-path]
   (inline-C Maybe "
+// TODO: should use nullTerm probably
    String *arg0Str = malloc_string(((String *)arg0)->len + 5);
     if (arg0->type == StringType)
       snprintf(arg0Str->buffer, ((String *)arg0)->len + 1, \"%s\", ((String *)arg0)->buffer);
@@ -30,6 +31,7 @@ void close_file(void *ptr) {
 
     FILE* fd = fopen(arg0Str->buffer, \"r\");
     dec_and_free((Value *)arg0Str, 1);
+    dec_and_free((Value *)arg0, 1);
     if (fd == NULL) {
       return(nothing);
     } else {
@@ -39,7 +41,6 @@ void close_file(void *ptr) {
       fdStruct->open = 1;
       Value *opaque = opaqueValue(fdStruct, close_file);
       Value *mo = maybe((List *)0, (Value *)0, opaque);
-      dec_and_free(opaque, 1);
       return(mo);
     }
 "))
@@ -48,18 +49,21 @@ void close_file(void *ptr) {
   ;; private function. Use 'blocking-read' instead
   (inline-C String "
   fileDescStruct *fileDesc = (fileDescStruct *)((Opaque *)arg0)->ptr;
-  if (feof(fileDesc->fd))
+  if (feof(fileDesc->fd)) {
+    dec_and_free(arg0, 1);
     return((Value *)malloc_string(0));
+  }
 
 // TODO: Figure out how to have a new type of buffer to avoid extra copy operation
   char buffer[5005];
   if (feof(fileDesc->fd)) {
-    fprintf(stderr, \"eof2\\n\");
+    dec_and_free(arg0, 1);
     return((Value *)malloc_string(0));
   } else {
     int64_t byte_count = fread(buffer, 1, 5000, fileDesc->fd);
     String *strVal = malloc_string(byte_count);
     strncpy(strVal->buffer, buffer, byte_count);
+    dec_and_free(arg0, 1);
     return((Value *)strVal);
   }
 "))
@@ -77,6 +81,7 @@ void close_file(void *ptr) {
 
 (defn fopen-write [file-path]
   (inline-C Maybe "
+// TODO: should use nullTerm probably
     String *arg0Str = malloc_string(((String *)arg0)->len + 5);
     if (arg0->type == StringType)
       snprintf(arg0Str->buffer, ((String *)arg0)->len + 1, \"%s\", ((String *)arg0)->buffer);
@@ -89,6 +94,7 @@ void close_file(void *ptr) {
 
     FILE* fd = fopen(arg0Str->buffer, \"wb\");
     dec_and_free((Value *)arg0Str, 1);
+    dec_and_free((Value *)arg0, 1);
     if (fd == NULL) {
       return(nothing);
     } else {
@@ -97,7 +103,6 @@ void close_file(void *ptr) {
       fdStruct->fd = fd;
       Value *opaque = opaqueValue(fdStruct, close_file);
       Value *mo = maybe((List *)0, (Value *)0, opaque);
-      dec_and_free(opaque, 1);
       return(mo);
     }
 "))
@@ -119,7 +124,10 @@ void close_file(void *ptr) {
     fprintf(stderr, \"\\ninvalid type for 'write*'\\n\");
     abort();
   }
-  return(numberValue(fwrite(buffer, 1, len, fileDesc->fd)));
+  Value *result = numberValue(fwrite(buffer, 1, len, fileDesc->fd));
+  dec_and_free(arg0, 1);
+  dec_and_free(arg1, 1);
+  return(result);
 "))
 
 (defn close* [file-desc]
@@ -127,6 +135,7 @@ void close_file(void *ptr) {
   (inline-C Number "
   fileDescStruct *fileDesc = (fileDescStruct *)((Opaque *)arg0)->ptr;
   fclose(fileDesc->fd);
+  dec_and_free(arg0, 1);
   return(numberValue(1));
 "))
 
@@ -183,6 +192,7 @@ void close_file(void *ptr) {
     fread(strVal->buffer, 1, buffSize, file);
     fclose(file);
     dec_and_free((Value *)arg0Str, 1);
+    dec_and_free((Value *)arg0, 1);
     return((Value *)strVal);\n"))
 
 
